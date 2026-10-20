@@ -12,6 +12,22 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: () =>
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
+  async function finishOrganizationSetup() {
+    if (!supabase) return;
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) throw userError ?? new Error("Faça login novamente para continuar.");
+    const metadata = userData.user.user_metadata as { business_name?: string; business_kind?: string };
+    const name = (metadata.business_name ?? "").trim();
+    const businessKind = metadata.business_kind === "estetica" ? "estetica" : "barbearia";
+    if (!name) {
+      setMessage("Conta autenticada. Para concluir o espaço, saia e use Criar conta informando o nome do estabelecimento.");
+      return;
+    }
+    const { error } = await supabase.rpc("create_first_organization", { org_name: name, org_kind: businessKind });
+    if (error && !error.message.toLowerCase().includes("already belongs")) throw error;
+    onAuthenticated();
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -24,7 +40,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: () =>
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
-        onAuthenticated();
+        await finishOrganizationSetup();
       } else {
         if (!businessName.trim()) throw new Error("Informe o nome do estabelecimento.");
         const { data, error } = await supabase.auth.signUp({
@@ -33,9 +49,10 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: () =>
           options: { data: { business_name: businessName.trim(), business_kind: kind } },
         });
         if (error) throw error;
-        if (data.session) onAuthenticated();
-        else {
-          setMessage("Cadastro criado. Confirme o e-mail e depois entre para concluir o cadastro do estabelecimento.");
+        if (data.session) {
+          await finishOrganizationSetup();
+        } else {
+          setMessage("Cadastro criado. Confirme o e-mail e depois entre para concluir a criação do estabelecimento.");
           setMode("login");
         }
       }
