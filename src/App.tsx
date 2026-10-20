@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Activity, ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, ChevronRight, Clock3,
   CreditCard, Filter, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Search,
