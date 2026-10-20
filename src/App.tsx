@@ -5,6 +5,7 @@ import {
   Scissors, Settings, Sparkles, Users, Wallet, X, type LucideIcon
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
+import AuthScreen from "./auth/AuthScreen";
 
 type Kind = "Barbearia" | "Estética";
 type Status = "Confirmado" | "Aguardando" | "Concluído" | "Cancelado";
@@ -37,6 +38,8 @@ const seed:Appointment[] = [
 function IconButton({label,children,onClick}:{label:string;children:React.ReactNode;onClick?:()=>void}) { return <button className="icon-button" aria-label={label} title={label} onClick={onClick}>{children}</button>; }
 
 export default function App(){
+ const [sessionReady,setSessionReady]=useState(false),[authenticated,setAuthenticated]=useState(false);
+ useState(()=>{ if(!supabase){setSessionReady(true);return;} supabase.auth.getSession().then(({data})=>{setAuthenticated(Boolean(data.session));setSessionReady(true);}); const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>setAuthenticated(Boolean(session))); return ()=>subscription.unsubscribe(); });
  const [kind,setKind]=useState<Kind>("Barbearia"),[page,setPage]=useState("Visão geral"),[appointments,setAppointments]=useState(seed);
  const [query,setQuery]=useState(""),[showBooking,setShowBooking]=useState(false),[mobileNav,setMobileNav]=useState(false),[notice,setNotice]=useState("");
  const [customer,setCustomer]=useState(""),[service,setService]=useState(demoServices.Barbearia[0].name),[professional,setProfessional]=useState("Rafael Costa"),[time,setTime]=useState("14:00"),[filter,setFilter]=useState("Todos");
@@ -50,6 +53,8 @@ export default function App(){
  function addAppointment(e:React.FormEvent<HTMLFormElement>){e.preventDefault();const s=demoServices[kind].find(v=>v.name===service)??demoServices[kind][0];const name=customer.trim();if(!name)return;const a:Appointment={id:Date.now(),customer:name,initials:name.split(/\s+/).slice(0,2).map(v=>v[0]).join("").toUpperCase(),service:s.name,professional,time,duration:s.duration,price:s.price,status:"Confirmado",color:kind==="Barbearia"?"blue":"pink"};setAppointments(prev=>[...prev,a].sort((x,y)=>x.time.localeCompare(y.time)));setShowBooking(false);setCustomer("");setNotice("Agendamento adicionado apenas nesta demonstração. Configure o Supabase para salvar no banco.");}
  function updateStatus(id:number,status:Status){setAppointments(prev=>prev.map(a=>a.id===id?{...a,status}:a));setNotice("Status alterado somente na demonstração.");}
  async function signOut(){if(supabase)await supabase.auth.signOut();setNotice("Sessão Supabase encerrada, se havia uma sessão ativa.");}
+ if(!sessionReady) return <div className="auth-loading">Carregando DS Agenda…</div>;
+ if(supabase && !authenticated) return <AuthScreen onAuthenticated={()=>setAuthenticated(true)} />;
  return <div className="app-shell">
  {mobileNav&&<button className="nav-backdrop" aria-label="Fechar menu" onClick={()=>setMobileNav(false)}/>}
  <aside className={`sidebar ${mobileNav?"sidebar-open":""}`}>
