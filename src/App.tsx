@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import AuthScreen from "./auth/AuthScreen";
+import { useEffect } from "react";
 
 type Kind = "Barbearia" | "Estética";
 type Status = "Confirmado" | "Aguardando" | "Concluído" | "Cancelado";
@@ -39,7 +40,7 @@ function IconButton({label,children,onClick}:{label:string;children:React.ReactN
 
 export default function App(){
  const [sessionReady,setSessionReady]=useState(false),[authenticated,setAuthenticated]=useState(false);
- useState(()=>{ if(!supabase){setSessionReady(true);return;} supabase.auth.getSession().then(({data})=>{setAuthenticated(Boolean(data.session));setSessionReady(true);}); const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>setAuthenticated(Boolean(session))); return ()=>subscription.unsubscribe(); });
+ useEffect(()=>{ if(!supabase){setSessionReady(true);return;} let mounted=true; supabase.auth.getSession().then(({data})=>{if(mounted){setAuthenticated(Boolean(data.session));setSessionReady(true);}}); const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{setAuthenticated(Boolean(session));setSessionReady(true);}); return ()=>{mounted=false;subscription.unsubscribe();}; },[]);
  const [kind,setKind]=useState<Kind>("Barbearia"),[page,setPage]=useState("Visão geral"),[appointments,setAppointments]=useState(seed);
  const [query,setQuery]=useState(""),[showBooking,setShowBooking]=useState(false),[mobileNav,setMobileNav]=useState(false),[notice,setNotice]=useState("");
  const [customer,setCustomer]=useState(""),[service,setService]=useState(demoServices.Barbearia[0].name),[professional,setProfessional]=useState("Rafael Costa"),[time,setTime]=useState("14:00"),[filter,setFilter]=useState("Todos");
