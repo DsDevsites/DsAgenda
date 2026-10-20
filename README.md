@@ -2,37 +2,65 @@
 
 SaaS de agendamento e gestão para barbearias e clínicas de estética, desenvolvido pela DS DevSites.
 
-## Objetivo
+## Estado atual
 
-Construir uma plataforma multiempresa com agenda, clientes, serviços, profissionais e ferramentas administrativas. Os dados de cada estabelecimento devem permanecer isolados.
+O repositório contém a primeira interface navegável do painel. Os agendamentos são demonstrativos e ficam apenas na memória da página. Autenticação, cadastros persistentes e cobrança ainda não estão implementados.
 
-## Stack planejada
+## Stack
 
 - React + TypeScript + Vite
-- Supabase Auth e PostgreSQL com Row Level Security (RLS)
+- Supabase JS para autenticação e persistência (próxima etapa)
 - Cloudflare Pages para a interface
-- Cloudflare Workers apenas para APIs/integrações que precisem de lógica no servidor
+- Cloudflare Workers opcional para APIs e integrações protegidas
 
-## Desenvolvimento local
+## Execução local
 
-Os comandos exatos serão definidos quando a aplicação for inicializada.
+Use Node.js 22 ou 24 e npm.
 
-## Segurança
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-- Nunca comite arquivos `.env` ou credenciais.
-- Chaves privadas do Supabase (service_role/secret) não podem ser expostas no navegador.
-- Toda tabela com dados de clientes deve ter políticas RLS verificadas.
-- Nunca confie apenas em filtros de interface para isolar empresas.
+No PowerShell: `Copy-Item .env.example .env.local`. Sem as variáveis do Supabase, o painel abre em modo demonstração.
 
-## Fluxo de atualização
+```bash
+npm run build
+npm run preview
+```
 
-1. Desenvolver e testar em uma branch de trabalho.
-2. Fazer commit e enviar ao GitHub.
-3. Abrir PR para `main`.
-4. Conferir o resultado de build/preview.
-5. Mesclar após verificar o preview; Cloudflare Pages pode publicar automaticamente a branch de produção.
-6. Alterações no banco devem ser versionadas em migrações SQL e aplicadas de forma controlada.
+## Supabase
 
-## Status inicial
+1. Crie um projeto.
+2. Em Project Settings → API, copie Project URL e publishable key (ou chave legada anon).
+3. Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local`.
+4. Nunca exponha service_role/secret no navegador ou no GitHub.
+5. Antes de usar dados reais, precisamos criar migrações, RLS, autenticação e operações de leitura/gravação.
 
-Repositório inicializado com documentação. A aplicação ainda precisa ser criada e conectada ao projeto Supabase e à Cloudflare.
+## Cloudflare Pages com GitHub
+
+1. Cloudflare → Workers & Pages → Create → Pages → Connect to Git.
+2. Selecione `DsDevsites/DsAgenda`.
+3. Framework Vite, branch `main`, build `npm run build`, diretório `dist`.
+4. Em Environment variables, configure as duas variáveis `VITE_*` para Production e Preview.
+5. Faça o deploy inicial. Push em `main` dispara build; branches podem gerar previews conforme as configurações.
+6. Confira logs de build se falhar.
+
+Variáveis `VITE_*` entram no bundle público. Só use valores publicáveis; nunca coloque segredos nessas variáveis.
+
+## Fluxo seguro de atualização
+
+Crie uma branch por funcionalidade; rode `npm run build`; faça commit/push; abra PR e teste o preview; só então mescle na `main`. Versione alterações de banco em migrações SQL no diretório `supabase/migrations`. Não remova tabelas ou migrações já usadas em produção sem plano de migração e backup.
+
+## Segurança multiempresa
+
+Todos os registros comerciais devem estar vinculados a um estabelecimento. Ative RLS nas tabelas privadas e valide acesso por organização. Filtros na interface não são controle de acesso. Privilégios administrativos devem ser validados do lado seguro.
+
+## Próximas etapas
+
+1. Esquema multiempresa: organizações, membros, clientes, profissionais, serviços e agendamentos.
+2. Auth e criação inicial do estabelecimento.
+3. CRUD Supabase + RLS, incluindo teste de isolamento entre duas contas.
+4. Persistência dos agendamentos e cadastros.
+5. Financeiro, pacotes, lembretes e assinatura depois de assegurar a base.
