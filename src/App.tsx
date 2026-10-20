@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, ChevronRight, Clock3,
   CreditCard, Filter, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Search,
@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import AuthScreen from "./auth/AuthScreen";
-import { useEffect } from "react";
 
 type Kind = "Barbearia" | "Estética";
 type Status = "Confirmado" | "Aguardando" | "Concluído" | "Cancelado";
@@ -40,7 +39,26 @@ function IconButton({label,children,onClick}:{label:string;children:React.ReactN
 
 export default function App(){
  const [sessionReady,setSessionReady]=useState(false),[authenticated,setAuthenticated]=useState(false);
- useEffect(()=>{ if(!supabase){setSessionReady(true);return;} let mounted=true; supabase.auth.getSession().then(({data})=>{if(mounted){setAuthenticated(Boolean(data.session));setSessionReady(true);}}); const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{setAuthenticated(Boolean(session));setSessionReady(true);}); return ()=>{mounted=false;subscription.unsubscribe();}; },[]);
+ const [organizationName,setOrganizationName]=useState("");
+ const [organizationId,setOrganizationId]=useState<string|null>(null);
+ const [loadingBusiness,setLoadingBusiness]=useState(false);
+ useEffect(()=>{ if(!supabase){setSessionReady(true);return;} let mounted=true;
+ supabase.auth.getSession().then(({data})=>{if(mounted){setAuthenticated(Boolean(data.session));setSessionReady(true);}});
+ const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{setAuthenticated(Boolean(session));setSessionReady(true);setOrganizationId(null);});
+ return ()=>{mounted=false;subscription.unsubscribe();};
+},[]);
+useEffect(()=>{if(!supabase||!authenticated)return; let mounted=true; setLoadingBusiness(true);
+ (async()=>{try{
+   const {data:members,error}=await supabase.from("organization_members").select("organization_id, role").limit(1).maybeSingle();
+   if(error)throw error;
+   if(!members){if(mounted){setOrganizationId(null);setOrganizationName("");}return;}
+   const {data:org,error:orgError}=await supabase.from("organizations").select("id,name,kind").eq("id",members.organization_id).maybeSingle();
+   if(orgError)throw orgError;
+   if(mounted){setOrganizationId(org?.id??null);setOrganizationName(org?.name??"");if(org?.kind==="estetica")setKind("Estética");}
+ }catch(error){if(mounted)setNotice(error instanceof Error?error.message:"Não foi possível carregar o estabelecimento.");}
+ finally{if(mounted)setLoadingBusiness(false);}})();
+ return ()=>{mounted=false;};
+},[authenticated]);
  const [kind,setKind]=useState<Kind>("Barbearia"),[page,setPage]=useState("Visão geral"),[appointments,setAppointments]=useState(seed);
  const [query,setQuery]=useState(""),[showBooking,setShowBooking]=useState(false),[mobileNav,setMobileNav]=useState(false),[notice,setNotice]=useState("");
  const [customer,setCustomer]=useState(""),[service,setService]=useState(demoServices.Barbearia[0].name),[professional,setProfessional]=useState("Rafael Costa"),[time,setTime]=useState("14:00"),[filter,setFilter]=useState("Todos");
@@ -56,11 +74,12 @@ export default function App(){
  async function signOut(){if(supabase)await supabase.auth.signOut();setNotice("Sessão Supabase encerrada, se havia uma sessão ativa.");}
  if(!sessionReady) return <div className="auth-loading">Carregando DS Agenda…</div>;
  if(supabase && !authenticated) return <AuthScreen onAuthenticated={()=>setAuthenticated(true)} />;
+ if(supabase && authenticated && !loadingBusiness && !organizationId) return <div className="auth-loading">Sua conta ainda não possui um estabelecimento. Saia e crie novamente sua conta informando o nome do negócio.</div>;
  return <div className="app-shell">
  {mobileNav&&<button className="nav-backdrop" aria-label="Fechar menu" onClick={()=>setMobileNav(false)}/>}
  <aside className={`sidebar ${mobileNav?"sidebar-open":""}`}>
   <div className="brand"><div className="brand-mark"><Scissors size={22}/></div><div><span className="brand-name">ds<span>agenda</span></span><span className="brand-caption">GESTÃO INTELIGENTE</span></div><IconButton label="Fechar menu" onClick={()=>setMobileNav(false)}><X size={18}/></IconButton></div>
-  <div className="workspace-switcher"><div className="workspace-avatar">{kind==="Barbearia"?"B":"E"}</div><div className="workspace-copy"><strong>{kind==="Barbearia"?"Barbearia Studio":"Clínica Bella"}</strong><span>Plano demonstração</span></div><ChevronDown size={15}/></div>
+  <div className="workspace-switcher"><div className="workspace-avatar">{kind==="Barbearia"?"B":"E"}</div><div className="workspace-copy"><strong>{organizationName || (kind==="Barbearia"?"Barbearia Studio":"Clínica Bella")}</strong><span>Plano demonstração</span></div><ChevronDown size={15}/></div>
   <div className="nav-list">{nav.map(item=><div key={item.label}>{item.section&&<div className="nav-section">{item.section}</div>}<button className={`nav-item ${page===item.label?"active":""}`} onClick={()=>{setPage(item.label);setMobileNav(false);}}><item.icon size={18}/><span>{item.label}</span>{item.label==="Agendamentos"&&<span className="nav-count">{appointments.length}</span>}</button></div>)}</div>
   <div className="sidebar-bottom"><div className="upgrade-card"><div className="upgrade-icon"><Sparkles size={17}/></div><strong>Desbloqueie mais</strong><p>Conheça os recursos dos planos profissionais.</p><button onClick={()=>setNotice("Planos e cobrança serão implementados em próxima etapa.")}>Conhecer planos <ChevronRight size={14}/></button></div><div className="profile-row"><div className="profile-avatar">DS</div><div className="profile-copy"><strong>Administrador</strong><span>Minha conta</span></div><IconButton label="Sair" onClick={signOut}><LogOut size={17}/></IconButton></div></div>
  </aside>
