@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { CalendarDays, Eye, EyeOff, Scissors, Sparkles } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
@@ -34,7 +34,10 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: () =>
         });
         if (error) throw error;
         if (data.session) onAuthenticated();
-        else setMessage("Cadastro iniciado. Confira seu e-mail para confirmar a conta antes de entrar.");
+        else {
+          setMessage("Cadastro criado. Confirme o e-mail e depois entre para concluir o cadastro do estabelecimento.");
+          setMode("login");
+        }
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
