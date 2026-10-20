@@ -68,9 +68,29 @@ useEffect(()=>{if(!supabase||!authenticated)return; let mounted=true; setLoading
  const visible=useMemo(()=>appointments.filter(a=>(`${a.customer} ${a.service} ${a.professional}`.toLowerCase().includes(query.toLowerCase()))&&(filter==="Todos"||a.status===filter)),[appointments,query,filter]);
  const completed=appointments.filter(a=>a.status==="Concluído"),confirmed=appointments.filter(a=>a.status==="Confirmado");
  const revenue=completed.reduce((n,a)=>n+a.price,0),uniqueCustomers=new Set(appointments.map(a=>a.customer)).size;
- function selectKind(next:Kind){setKind(next);setService(demoServices[next][0].name);setProfessional(next==="Barbearia"?"Rafael Costa":"Camila Rocha");setNotice(`Visualização de ${next.toLowerCase()} selecionada. Dados demonstrativos.`);}
- function addAppointment(e:React.FormEvent<HTMLFormElement>){e.preventDefault();const s=demoServices[kind].find(v=>v.name===service)??demoServices[kind][0];const name=customer.trim();if(!name)return;const a:Appointment={id:Date.now(),customer:name,initials:name.split(/\s+/).slice(0,2).map(v=>v[0]).join("").toUpperCase(),service:s.name,professional,time,duration:s.duration,price:s.price,status:"Confirmado",color:kind==="Barbearia"?"blue":"pink"};setAppointments(prev=>[...prev,a].sort((x,y)=>x.time.localeCompare(y.time)));setShowBooking(false);setCustomer("");setNotice("Agendamento adicionado apenas nesta demonstração. Configure o Supabase para salvar no banco.");}
- function updateStatus(id:number,status:Status){setAppointments(prev=>prev.map(a=>a.id===id?{...a,status}:a));setNotice("Status alterado somente na demonstração.");}
+ async function selectKind(next:Kind){setKind(next);setService(demoServices[next][0].name);setProfessional(next==="Barbearia"?"Rafael Costa":"Camila Rocha");setNotice("O tipo de negócio pertence ao estabelecimento e será controlado pelas configurações.");}
+ async function addAppointment(e:React.FormEvent<HTMLFormElement>){
+  e.preventDefault();const s=demoServices[kind].find(v=>v.name===service)??demoServices[kind][0],name=customer.trim();if(!name)return;
+  if(supabase&&organizationId){
+   const startAt=new Date();const [hours,minutes]=time.split(":").map(Number);startAt.setHours(hours,minutes,0,0);
+   const endAt=new Date(startAt.getTime()+Number.parseInt(s.duration,10)*60*1000);
+   try{
+    const {data:customerRow,error:customerError}=await supabase.from("customers").insert({organization_id:organizationId,name}).select("id").single();
+    if(customerError)throw customerError;
+    const {error}=await supabase.from("appointments").insert({organization_id:organizationId,customer_id:customerRow.id,customer_name:name,service_name:s.name,professional_name:professional,starts_at:startAt.toISOString(),ends_at:endAt.toISOString(),status:"confirmed",price_cents:s.price*100});
+    if(error)throw error;
+   }catch(error){setNotice(error instanceof Error?error.message:"Não foi possível salvar o agendamento.");return;}
+  }
+  const a:Appointment={id:Date.now(),customer:name,initials:name.split(/\\s+/).slice(0,2).map(v=>v[0]).join("").toUpperCase(),service:s.name,professional,time,duration:s.duration,price:s.price,status:"Confirmado",color:kind==="Barbearia"?"blue":"pink"};
+  setAppointments(prev=>[...prev,a].sort((x,y)=>x.time.localeCompare(y.time)));setShowBooking(false);setCustomer("");setNotice(supabase&&organizationId?"Agendamento salvo no Supabase.":"Agendamento adicionado somente à demonstração; configure o Supabase para persistir.");
+ }
+ async function refreshAppointments(){
+  if(!supabase||!organizationId)return;
+  const today=new Date();today.setHours(0,0,0,0);const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
+  const {data,error}=await supabase.from("appointments").select("id,customer_name,service_name,professional_name,starts_at,ends_at,status,price_cents").eq("organization_id",organizationId).gte("starts_at",today.toISOString()).lt("starts_at",tomorrow.toISOString()).order("starts_at");
+  if(error){setNotice(error.message);return;}
+  setAppointments((data??[]).map(row=>{const start=new Date(row.starts_at),end=new Date(row.ends_at);const duration=Math.max(5,Math.round((end.getTime()-start.getTime())/60000));const statusMap:Record<string,Status>={pending:"Aguardando",confirmed:"Confirmado",completed:"Concluído",cancelled:"Cancelado",no_show:"Cancelado"};const initials=row.customer_name.split(/\\s+/).slice(0,2).map((part:string)=>part[0]).join("").toUpperCase();return {id:row.id,customer:row.customer_name,initials,service:row.service_name,professional:row.professional_name??"Equipe",time:start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),duration:`${duration} min`,price:Number(row.price_cents)/100,status:statusMap[row.status]??"Aguardando",color:"blue"};}));
+ }
  async function signOut(){if(supabase)await supabase.auth.signOut();setNotice("Sessão Supabase encerrada, se havia uma sessão ativa.");}
  if(!sessionReady) return <div className="auth-loading">Carregando DS Agenda…</div>;
  if(supabase && !authenticated) return <AuthScreen onAuthenticated={()=>setAuthenticated(true)} />;
